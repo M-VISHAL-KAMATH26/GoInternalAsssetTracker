@@ -5,7 +5,11 @@ import (
 	"os"
 
 	"asset-backend/internal/inventory/domain"
+	"asset-backend/internal/inventory/handler"
+	"asset-backend/internal/inventory/repository"
 	sharedDB "asset-backend/internal/shared/db"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -22,8 +26,22 @@ func main() {
 	if err := database.AutoMigrate(&domain.Asset{}, &domain.AssetAssignment{}); err != nil {
 		log.Fatalf("inventory-service: failed to run migrations: %v", err)
 	}
-
 	log.Println("inventory-service: connected and migrated successfully")
 
-	// Gin/gRPC server setup comes in a later phase.
+	// Wire up the repository -> handler chain.
+	assetRepo := repository.NewAssetRepository(database)
+	assetHandler := handler.NewAssetHandler(assetRepo)
+
+	router := gin.Default()
+	handler.RegisterAssetRoutes(router, assetHandler)
+
+	port := os.Getenv("INVENTORY_SERVICE_PORT")
+	if port == "" {
+		port = "8081"
+	}
+
+	log.Printf("inventory-service: listening on :%s", port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("inventory-service: server failed: %v", err)
+	}
 }
