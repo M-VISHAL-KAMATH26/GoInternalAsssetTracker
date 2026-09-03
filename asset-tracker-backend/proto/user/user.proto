@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "asset-backend/proto/user";
+
+service UserService {
+  rpc GetEmployee(GetEmployeeRequest) returns (EmployeeResponse);
+  rpc GetManagerOf(GetManagerOfRequest) returns (EmployeeResponse);
+}
+
+message GetEmployeeRequest {
+  string employee_id = 1;
+}
+
+message GetManagerOfRequest {
+  string employee_id = 1;
+}
+
+message EmployeeResponse {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string role = 4;
+  string department = 5;
+  string manager_id = 6; // empty string if no manager
+}
