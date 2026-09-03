@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"asset-backend/internal/request/client"
 	"asset-backend/internal/request/domain"
 	"asset-backend/internal/request/handler"
 	"asset-backend/internal/request/repository"
@@ -15,7 +16,7 @@ import (
 func main() {
 	dsn := os.Getenv("REQUEST_DB_DSN")
 	if dsn == "" {
-		dsn = "root:vishal123@tcp(127.0.0.1:3306)/request_db?charset=utf8mb4&parseTime=True&loc=Local"
+		dsn = "root:password@tcp(127.0.0.1:3306)/request_db?charset=utf8mb4&parseTime=True&loc=Local"
 	}
 
 	database, err := sharedDB.Connect(dsn)
@@ -28,11 +29,32 @@ func main() {
 	}
 	log.Println("request-service: connected and migrated successfully")
 
+	userAddr := os.Getenv("USER_SERVICE_GRPC_ADDR")
+	if userAddr == "" {
+		userAddr = "localhost:9091"
+	}
+	userClient, err := client.NewUserClient(userAddr)
+	if err != nil {
+		log.Fatalf("request-service: failed to connect to user-service: %v", err)
+	}
+
+	inventoryAddr := os.Getenv("INVENTORY_SERVICE_GRPC_ADDR")
+	if inventoryAddr == "" {
+		inventoryAddr = "localhost:9092"
+	}
+	inventoryClient, err := client.NewInventoryClient(inventoryAddr)
+	if err != nil {
+		log.Fatalf("request-service: failed to connect to inventory-service: %v", err)
+	}
+
 	requestRepo := repository.NewRequestRepository(database)
-	requestHandler := handler.NewRequestHandler(requestRepo)
+	approvalRepo := repository.NewApprovalRepository(database)
+
+	requestHandler := handler.NewRequestHandler(requestRepo, userClient)
+	approvalHandler := handler.NewApprovalHandler(requestRepo, approvalRepo, inventoryClient)
 
 	router := gin.Default()
-	handler.RegisterRequestRoutes(router, requestHandler)
+	handler.RegisterRequestRoutes(router, requestHandler, approvalHandler)
 
 	port := os.Getenv("REQUEST_SERVICE_PORT")
 	if port == "" {

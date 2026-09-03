@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"asset-backend/internal/request/client"
 	"asset-backend/internal/request/domain"
 	"asset-backend/internal/request/repository"
 	"asset-backend/internal/shared/middleware"
@@ -13,15 +14,14 @@ import (
 )
 
 type RequestHandler struct {
-	repo repository.RequestRepository
+	repo       repository.RequestRepository
+	userClient client.UserClient
 }
 
-func NewRequestHandler(repo repository.RequestRepository) *RequestHandler {
-	return &RequestHandler{repo: repo}
+func NewRequestHandler(repo repository.RequestRepository, userClient client.UserClient) *RequestHandler {
+	return &RequestHandler{repo: repo, userClient: userClient}
 }
 
-// currentEmployeeID pulls the authenticated employee's ID out of the
-// Gin context, where AuthMiddleware placed it after validating the JWT.
 func currentEmployeeID(c *gin.Context) (uuid.UUID, error) {
 	raw, exists := c.Get(middleware.ContextKeyEmployeeID)
 	if !exists {
@@ -38,7 +38,6 @@ func currentRole(c *gin.Context) string {
 	return raw.(string)
 }
 
-// CreateRequest handles POST /requests.
 func (h *RequestHandler) CreateRequest(c *gin.Context) {
 	employeeID, err := currentEmployeeID(c)
 	if err != nil {
@@ -49,6 +48,16 @@ func (h *RequestHandler) CreateRequest(c *gin.Context) {
 	var req CreateRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	_, err = h.userClient.GetEmployee(c.Request.Context(), employeeID)
+	if err != nil {
+		if errors.Is(err, client.ErrEmployeeNotFound) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "employee not recognized"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify employee"})
 		return
 	}
 
@@ -69,7 +78,6 @@ func (h *RequestHandler) CreateRequest(c *gin.Context) {
 	c.JSON(http.StatusCreated, toRequestResponse(assetRequest))
 }
 
-// ListMyRequests handles GET /requests — always scoped to the caller's own requests.
 func (h *RequestHandler) ListMyRequests(c *gin.Context) {
 	employeeID, err := currentEmployeeID(c)
 	if err != nil {
@@ -86,10 +94,6 @@ func (h *RequestHandler) ListMyRequests(c *gin.Context) {
 	c.JSON(http.StatusOK, toRequestResponseList(requests))
 }
 
-// GetRequest handles GET /requests/:id. Employees can only view their
-// own request; managers/admins can view any request (foreshadowing
-// the approval workflow, where a manager needs to see requests that
-// aren't their own).
 func (h *RequestHandler) GetRequest(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -115,8 +119,6 @@ func (h *RequestHandler) GetRequest(c *gin.Context) {
 
 	role := currentRole(c)
 	if role == "employee" && assetRequest.EmployeeID != employeeID {
-		// Deliberately 404, not 403 — don't reveal that a request with
-		// this ID exists at all to someone who doesn't own it.
 		c.JSON(http.StatusNotFound, gin.H{"error": "request not found"})
 		return
 	}

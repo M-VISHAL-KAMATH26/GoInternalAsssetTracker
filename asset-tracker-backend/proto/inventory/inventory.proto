@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package inventory;
+
+option go_package = "asset-backend/proto/inventory";
+
+service InventoryService {
+  rpc CheckAvailability(CheckAvailabilityRequest) returns (CheckAvailabilityResponse);
+  rpc ReserveAsset(ReserveAssetRequest) returns (ReserveAssetResponse);
+}
+
+message CheckAvailabilityRequest {
+  string asset_type = 1;
+  string category = 2;
+}
+
+message CheckAvailabilityResponse {
+  bool available = 1;
+  int32 available_count = 2;
+}
+
+message ReserveAssetRequest {
+  string asset_type = 1;
+  string category = 2;
+  string employee_id = 3;
+}
+
+message ReserveAssetResponse {
+  string asset_id = 1;
+  string serial_number = 2;
+}
