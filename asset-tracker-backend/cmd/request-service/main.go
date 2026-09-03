@@ -5,7 +5,11 @@ import (
 	"os"
 
 	"asset-backend/internal/request/domain"
+	"asset-backend/internal/request/handler"
+	"asset-backend/internal/request/repository"
 	sharedDB "asset-backend/internal/shared/db"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -22,6 +26,21 @@ func main() {
 	if err := database.AutoMigrate(&domain.AssetRequest{}, &domain.Approval{}); err != nil {
 		log.Fatalf("request-service: failed to run migrations: %v", err)
 	}
-
 	log.Println("request-service: connected and migrated successfully")
+
+	requestRepo := repository.NewRequestRepository(database)
+	requestHandler := handler.NewRequestHandler(requestRepo)
+
+	router := gin.Default()
+	handler.RegisterRequestRoutes(router, requestHandler)
+
+	port := os.Getenv("REQUEST_SERVICE_PORT")
+	if port == "" {
+		port = "8082"
+	}
+
+	log.Printf("request-service: listening on :%s", port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("request-service: server failed: %v", err)
+	}
 }
