@@ -1,13 +1,15 @@
 package handler
 
 import (
+	"context"
 	"errors"
-	"log"
 	"net/http"
+	"time"
 
 	"asset-backend/internal/request/client"
 	"asset-backend/internal/request/domain"
 	"asset-backend/internal/request/repository"
+	"asset-backend/internal/shared/mq"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -17,13 +19,18 @@ type ApprovalHandler struct {
 	requestRepo     repository.RequestRepository
 	approvalRepo    repository.ApprovalRepository
 	inventoryClient client.InventoryClient
+	publisher       *mq.Publisher
 }
 
-func NewApprovalHandler(requestRepo repository.RequestRepository, approvalRepo repository.ApprovalRepository, inventoryClient client.InventoryClient) *ApprovalHandler {
-	return &ApprovalHandler{requestRepo: requestRepo, approvalRepo: approvalRepo, inventoryClient: inventoryClient}
+func NewApprovalHandler(requestRepo repository.RequestRepository, approvalRepo repository.ApprovalRepository, inventoryClient client.InventoryClient, publisher *mq.Publisher) *ApprovalHandler {
+	return &ApprovalHandler{
+		requestRepo:     requestRepo,
+		approvalRepo:    approvalRepo,
+		inventoryClient: inventoryClient,
+		publisher:       publisher,
+	}
 }
 
-// ApproveRequest handles PATCH /requests/:id/approve — manager/admin only.
 func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 	requestID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -38,7 +45,7 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 	}
 
 	var body ApprovalActionRequest
-	_ = c.ShouldBindJSON(&body) // comment is optional; ignore bind error on empty body
+	_ = c.ShouldBindJSON(&body)
 
 	assetRequest, err := h.requestRepo.GetByID(c.Request.Context(), requestID)
 	if err != nil {
@@ -55,7 +62,6 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 		return
 	}
 
-	// gRPC call to Inventory Service — reserve an available asset.
 	assetID, _, err := h.inventoryClient.ReserveAsset(c.Request.Context(), assetRequest.AssetType, assetRequest.Category, assetRequest.EmployeeID)
 	if err != nil {
 		if errors.Is(err, client.ErrAssetUnavailable) {
@@ -72,6 +78,7 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 		ManagerID: managerID,
 		Decision:  domain.DecisionApproved,
 		Comment:   body.Comment,
+		DecidedAt: time.Now(),
 	}
 	if err := h.approvalRepo.Create(c.Request.Context(), approval); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record approval"})
@@ -83,8 +90,22 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 		return
 	}
 
-	// Phase 7 will replace this log line with a real queue publish.
-	log.Printf("TODO: publish ApprovalDecided event for request %s (approved, asset %s)", requestID, assetID)
+	// Publish async event — the manager's response does NOT wait on
+	// this succeeding. A publish failure is logged, not surfaced to
+	// the caller, since the approval itself already succeeded.
+	event := mq.ApprovalDecidedEvent{
+		RequestID:  requestID,
+		EmployeeID: assetRequest.EmployeeID,
+		Decision:   string(domain.DecisionApproved),
+		AssetID:    assetID.String(),
+		Comment:    body.Comment,
+		DecidedAt:  time.Now(),
+	}
+	if err := h.publisher.PublishApprovalDecided(context.Background(), event); err != nil {
+		// TODO: proper logging/metrics — for now this is the only
+		// visibility into a failed publish.
+		println("failed to publish approval decided event:", err.Error())
+	}
 
 	c.JSON(http.StatusOK, ApprovalResponse{
 		RequestID: requestID.String(),
@@ -94,7 +115,6 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 	})
 }
 
-// RejectRequest handles PATCH /requests/:id/reject — manager/admin only.
 func (h *ApprovalHandler) RejectRequest(c *gin.Context) {
 	requestID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -132,6 +152,7 @@ func (h *ApprovalHandler) RejectRequest(c *gin.Context) {
 		ManagerID: managerID,
 		Decision:  domain.DecisionRejected,
 		Comment:   body.Comment,
+		DecidedAt: time.Now(),
 	}
 	if err := h.approvalRepo.Create(c.Request.Context(), approval); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record approval"})
@@ -143,7 +164,16 @@ func (h *ApprovalHandler) RejectRequest(c *gin.Context) {
 		return
 	}
 
-	log.Printf("TODO: publish ApprovalDecided event for request %s (rejected)", requestID)
+	event := mq.ApprovalDecidedEvent{
+		RequestID:  requestID,
+		EmployeeID: assetRequest.EmployeeID,
+		Decision:   string(domain.DecisionRejected),
+		Comment:    body.Comment,
+		DecidedAt:  time.Now(),
+	}
+	if err := h.publisher.PublishApprovalDecided(context.Background(), event); err != nil {
+		println("failed to publish approval decided event:", err.Error())
+	}
 
 	c.JSON(http.StatusOK, ApprovalResponse{
 		RequestID: requestID.String(),

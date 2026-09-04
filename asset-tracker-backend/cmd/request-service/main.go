@@ -9,6 +9,7 @@ import (
 	"asset-backend/internal/request/handler"
 	"asset-backend/internal/request/repository"
 	sharedDB "asset-backend/internal/shared/db"
+	"asset-backend/internal/shared/mq"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,7 +17,7 @@ import (
 func main() {
 	dsn := os.Getenv("REQUEST_DB_DSN")
 	if dsn == "" {
-		dsn = "root:password@tcp(127.0.0.1:3306)/request_db?charset=utf8mb4&parseTime=True&loc=Local"
+		dsn = "root:vishal123@tcp(127.0.0.1:3306)/request_db?charset=utf8mb4&parseTime=True&loc=Local"
 	}
 
 	database, err := sharedDB.Connect(dsn)
@@ -47,11 +48,20 @@ func main() {
 		log.Fatalf("request-service: failed to connect to inventory-service: %v", err)
 	}
 
+	rabbitURL := os.Getenv("RABBITMQ_URL")
+	if rabbitURL == "" {
+		rabbitURL = "amqp://guest:guest@localhost:5672/"
+	}
+	publisher, err := mq.NewPublisher(rabbitURL)
+	if err != nil {
+		log.Fatalf("request-service: failed to connect to rabbitmq: %v", err)
+	}
+
 	requestRepo := repository.NewRequestRepository(database)
 	approvalRepo := repository.NewApprovalRepository(database)
 
 	requestHandler := handler.NewRequestHandler(requestRepo, userClient)
-	approvalHandler := handler.NewApprovalHandler(requestRepo, approvalRepo, inventoryClient)
+	approvalHandler := handler.NewApprovalHandler(requestRepo, approvalRepo, inventoryClient, publisher)
 
 	router := gin.Default()
 	handler.RegisterRequestRoutes(router, requestHandler, approvalHandler)

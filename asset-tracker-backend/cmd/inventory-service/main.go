@@ -19,7 +19,7 @@ import (
 func main() {
 	dsn := os.Getenv("INVENTORY_DB_DSN")
 	if dsn == "" {
-		dsn = "root:password@tcp(127.0.0.1:3306)/inventory_db?charset=utf8mb4&parseTime=True&loc=Local"
+		dsn = "root:vishal123@tcp(127.0.0.1:3306)/inventory_db?charset=utf8mb4&parseTime=True&loc=Local"
 	}
 
 	database, err := sharedDB.Connect(dsn)
