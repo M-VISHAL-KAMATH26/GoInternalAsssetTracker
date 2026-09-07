@@ -16,6 +16,7 @@ import (
 	sharedDB "asset-backend/internal/shared/db"
 	"asset-backend/internal/shared/config"
 	"asset-backend/internal/shared/logger"
+	"asset-backend/internal/shared/middleware"
 	pb "asset-backend/proto/inventory"
 
 	"github.com/gin-gonic/gin"
@@ -58,6 +59,7 @@ func main() {
 
 	assetHandler := handler.NewAssetHandler(assetRepo)
 	router := gin.Default()
+	router.Use(middleware.CORSMiddleware())
 	handler.RegisterAssetRoutes(router, assetHandler)
 
 	httpServer := &http.Server{

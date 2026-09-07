@@ -15,6 +15,7 @@ import (
 	sharedDB "asset-backend/internal/shared/db"
 	"asset-backend/internal/shared/config"
 	"asset-backend/internal/shared/logger"
+	"asset-backend/internal/shared/middleware"
 	"asset-backend/internal/shared/mq"
 
 	"github.com/gin-gonic/gin"
@@ -61,6 +62,7 @@ func main() {
 	approvalHandler := handler.NewApprovalHandler(requestRepo, approvalRepo, inventoryClient, publisher)
 
 	router := gin.Default()
+	router.Use(middleware.CORSMiddleware())
 	handler.RegisterRequestRoutes(router, requestHandler, approvalHandler)
 
 	httpServer := &http.Server{
