@@ -1,6 +1,11 @@
 import axiosClient from '../../api/axios'
 
-export const createRequest = (request) => axiosClient.post('/requests', request)
+export const createRequest = ({ assetType, category, justification }) =>
+	axiosClient.post('/requests', {
+		asset_type: assetType,
+		category,
+		justification,
+	})
 
 export const listMyRequests = () => axiosClient.get('/requests')
 
