@@ -1,10 +1,14 @@
 package main
 
 import (
-	"log"
+	"context"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
+	"asset-backend/internal/shared/config"
+	"asset-backend/internal/shared/logger"
 	userdomain "asset-backend/internal/user/domain"
 	usergrpc "asset-backend/internal/user/grpc"
 	"asset-backend/internal/user/repository"
@@ -15,39 +19,53 @@ import (
 )
 
 func main() {
-	dsn := os.Getenv("USER_DB_DSN")
-	if dsn == "" {
-		dsn = "root:vishal123@tcp(127.0.0.1:3306)/user_db?charset=utf8mb4&parseTime=True&loc=Local"
-	}
+	cfg := config.LoadUserServiceConfig()
+	log := logger.New("user-service")
 
-	database, err := sharedDB.Connect(dsn)
+	database, err := sharedDB.Connect(cfg.DBDSN)
 	if err != nil {
-		log.Fatalf("user-service: failed to connect to database: %v", err)
+		log.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 
 	if err := database.AutoMigrate(&userdomain.Employee{}); err != nil {
-		log.Fatalf("user-service: failed to run migrations: %v", err)
+		log.Error("failed to run migrations", "error", err)
+		os.Exit(1)
 	}
-	log.Println("user-service: connected and migrated successfully")
+	log.Info("connected and migrated successfully")
 
 	employeeRepo := repository.NewEmployeeRepository(database)
 	userServer := usergrpc.NewServer(employeeRepo)
 
-	port := os.Getenv("USER_SERVICE_GRPC_PORT")
-	if port == "" {
-		port = "9091"
-	}
-
-	listener, err := net.Listen("tcp", ":"+port)
+	listener, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
-		log.Fatalf("user-service: failed to listen: %v", err)
+		log.Error("failed to listen", "error", err)
+		os.Exit(1)
 	}
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterUserServiceServer(grpcServer, userServer)
 
-	log.Printf("user-service: gRPC server listening on :%s", port)
-	if err := grpcServer.Serve(listener); err != nil {
-		log.Fatalf("user-service: server failed: %v", err)
+	go func() {
+		log.Info("gRPC server listening", "port", cfg.GRPCPort)
+		if err := grpcServer.Serve(listener); err != nil {
+			log.Error("gRPC server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Graceful shutdown: wait for SIGINT/SIGTERM, then stop cleanly.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Info("shutting down gracefully...")
+	grpcServer.GracefulStop()
+
+	sqlDB, err := database.DB()
+	if err == nil {
+		_ = sqlDB.Close()
 	}
+	log.Info("shutdown complete")
+	_ = context.Background()
 }

@@ -1,15 +1,21 @@
 package main
 
 import (
-	"log"
+	"context"
 	"net"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"asset-backend/internal/inventory/domain"
 	inventorygrpc "asset-backend/internal/inventory/grpc"
 	"asset-backend/internal/inventory/handler"
 	"asset-backend/internal/inventory/repository"
 	sharedDB "asset-backend/internal/shared/db"
+	"asset-backend/internal/shared/config"
+	"asset-backend/internal/shared/logger"
 	pb "asset-backend/proto/inventory"
 
 	"github.com/gin-gonic/gin"
@@ -17,40 +23,36 @@ import (
 )
 
 func main() {
-	dsn := os.Getenv("INVENTORY_DB_DSN")
-	if dsn == "" {
-		dsn = "root:vishal123@tcp(127.0.0.1:3306)/inventory_db?charset=utf8mb4&parseTime=True&loc=Local"
-	}
+	cfg := config.LoadInventoryServiceConfig()
+	log := logger.New("inventory-service")
 
-	database, err := sharedDB.Connect(dsn)
+	database, err := sharedDB.Connect(cfg.DBDSN)
 	if err != nil {
-		log.Fatalf("inventory-service: failed to connect to database: %v", err)
+		log.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 
 	if err := database.AutoMigrate(&domain.Asset{}, &domain.AssetAssignment{}); err != nil {
-		log.Fatalf("inventory-service: failed to run migrations: %v", err)
+		log.Error("failed to run migrations", "error", err)
+		os.Exit(1)
 	}
-	log.Println("inventory-service: connected and migrated successfully")
+	log.Info("connected and migrated successfully")
 
 	assetRepo := repository.NewAssetRepository(database)
 
+	grpcServer := grpc.NewServer()
+	pb.RegisterInventoryServiceServer(grpcServer, inventorygrpc.NewServer(assetRepo))
+
 	go func() {
-		grpcPort := os.Getenv("INVENTORY_SERVICE_GRPC_PORT")
-		if grpcPort == "" {
-			grpcPort = "9092"
-		}
-
-		listener, err := net.Listen("tcp", ":"+grpcPort)
+		listener, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 		if err != nil {
-			log.Fatalf("inventory-service: failed to listen on gRPC port: %v", err)
+			log.Error("failed to listen on gRPC port", "error", err)
+			os.Exit(1)
 		}
-
-		grpcServer := grpc.NewServer()
-		pb.RegisterInventoryServiceServer(grpcServer, inventorygrpc.NewServer(assetRepo))
-
-		log.Printf("inventory-service: gRPC server listening on :%s", grpcPort)
+		log.Info("gRPC server listening", "port", cfg.GRPCPort)
 		if err := grpcServer.Serve(listener); err != nil {
-			log.Fatalf("inventory-service: gRPC server failed: %v", err)
+			log.Error("gRPC server failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -58,13 +60,33 @@ func main() {
 	router := gin.Default()
 	handler.RegisterAssetRoutes(router, assetHandler)
 
-	httpPort := os.Getenv("INVENTORY_SERVICE_PORT")
-	if httpPort == "" {
-		httpPort = "8081"
+	httpServer := &http.Server{
+		Addr:    ":" + cfg.HTTPPort,
+		Handler: router,
 	}
 
-	log.Printf("inventory-service: HTTP server listening on :%s", httpPort)
-	if err := router.Run(":" + httpPort); err != nil {
-		log.Fatalf("inventory-service: HTTP server failed: %v", err)
+	go func() {
+		log.Info("HTTP server listening", "port", cfg.HTTPPort)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("HTTP server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Info("shutting down gracefully...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = httpServer.Shutdown(ctx)
+	grpcServer.GracefulStop()
+
+	sqlDB, err := database.DB()
+	if err == nil {
+		_ = sqlDB.Close()
 	}
+	log.Info("shutdown complete")
 }
