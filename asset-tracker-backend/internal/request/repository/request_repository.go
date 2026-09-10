@@ -15,6 +15,7 @@ var ErrRequestNotFound = errors.New("request not found")
 type RequestRepository interface {
 	Create(ctx context.Context, request *domain.AssetRequest) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.AssetRequest, error)
+	List(ctx context.Context) ([]domain.AssetRequest, error)
 	ListByEmployee(ctx context.Context, employeeID uuid.UUID) ([]domain.AssetRequest, error)
 	ListByStatus(ctx context.Context, status domain.RequestStatus) ([]domain.AssetRequest, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.RequestStatus) error
@@ -41,6 +42,12 @@ func (r *requestRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 		return nil, err
 	}
 	return &request, nil
+}
+
+func (r *requestRepository) List(ctx context.Context) ([]domain.AssetRequest, error) {
+	var requests []domain.AssetRequest
+	err := r.db.WithContext(ctx).Order("created_at DESC").Find(&requests).Error
+	return requests, err
 }
 
 func (r *requestRepository) ListByEmployee(ctx context.Context, employeeID uuid.UUID) ([]domain.AssetRequest, error) {

@@ -20,7 +20,7 @@ function LoginPage() {
 		try {
 			const data = await login(email.trim(), password)
 			dispatch(setCredentials(data.token))
-			navigate('/')
+			navigate(data.role === 'admin' ? '/admin' : '/')
 		} catch {
 			setError('Invalid email or password.')
 		} finally {

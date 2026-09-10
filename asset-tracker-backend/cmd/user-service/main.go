@@ -60,9 +60,11 @@ func main() {
 	}()
 
 	authHandler := handler.NewAuthHandler(employeeRepo, cfg.JWTSecret)
+	employeeHandler := handler.NewEmployeeHandler(employeeRepo)
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
 	handler.RegisterAuthRoutes(router, authHandler)
+	handler.RegisterEmployeeRoutes(router, employeeHandler)
 
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.HTTPPort,

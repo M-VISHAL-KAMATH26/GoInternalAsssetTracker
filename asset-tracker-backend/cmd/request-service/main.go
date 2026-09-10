@@ -12,8 +12,8 @@ import (
 	"asset-backend/internal/request/domain"
 	"asset-backend/internal/request/handler"
 	"asset-backend/internal/request/repository"
-	sharedDB "asset-backend/internal/shared/db"
 	"asset-backend/internal/shared/config"
+	sharedDB "asset-backend/internal/shared/db"
 	"asset-backend/internal/shared/logger"
 	"asset-backend/internal/shared/middleware"
 	"asset-backend/internal/shared/mq"
@@ -59,7 +59,7 @@ func main() {
 	approvalRepo := repository.NewApprovalRepository(database)
 
 	requestHandler := handler.NewRequestHandler(requestRepo, userClient)
-	approvalHandler := handler.NewApprovalHandler(requestRepo, approvalRepo, inventoryClient, publisher)
+	approvalHandler := handler.NewApprovalHandler(requestRepo, approvalRepo, inventoryClient, userClient, publisher)
 
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())

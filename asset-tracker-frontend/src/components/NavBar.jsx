@@ -13,23 +13,30 @@ function NavBar() {
 	const role = useSelector((state) => state.auth.role)?.toLowerCase()
 
 	const handleLogout = () => {
+		const loginPath = role === 'admin' ? '/admin/login' : '/login'
 		dispatch(logout())
-		navigate('/login')
+		navigate(loginPath)
 	}
 
 	return (
 		<header className="border-b border-slate-200 bg-white">
 			<div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3 sm:px-6">
-				<NavLink className="mr-2 text-base font-semibold tracking-tight text-slate-900" to="/requests">
+				<NavLink className="mr-2 text-base font-semibold tracking-tight text-slate-900" to={role === 'admin' ? '/admin' : '/requests'}>
 					Asset Tracker
 				</NavLink>
 				<nav aria-label="Main navigation" className="flex flex-1 flex-wrap items-center gap-1">
+					{role === 'admin' && <NavLink className={linkClassName} to="/admin">Admin panel</NavLink>}
 					<NavLink className={linkClassName} to="/requests">Requests</NavLink>
 					<NavLink className={linkClassName} to="/requests/new">New request</NavLink>
 					{(role === 'manager' || role === 'admin') && (
 						<NavLink className={linkClassName} to="/approvals">Approvals</NavLink>
 					)}
-					{role === 'admin' && <NavLink className={linkClassName} to="/assets">Assets</NavLink>}
+					{role === 'admin' && (
+						<>
+							<NavLink className={linkClassName} to="/admin/users/new">Add user</NavLink>
+							<NavLink className={linkClassName} to="/assets">Assets</NavLink>
+						</>
+					)}
 				</nav>
 				<div className="flex items-center gap-3">
 					<span className="hidden text-xs font-medium uppercase tracking-wide text-slate-400 sm:inline">

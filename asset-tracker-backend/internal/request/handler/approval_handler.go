@@ -19,16 +19,66 @@ type ApprovalHandler struct {
 	requestRepo     repository.RequestRepository
 	approvalRepo    repository.ApprovalRepository
 	inventoryClient client.InventoryClient
+	userClient      client.UserClient
 	publisher       *mq.Publisher
 }
 
-func NewApprovalHandler(requestRepo repository.RequestRepository, approvalRepo repository.ApprovalRepository, inventoryClient client.InventoryClient, publisher *mq.Publisher) *ApprovalHandler {
+func NewApprovalHandler(requestRepo repository.RequestRepository, approvalRepo repository.ApprovalRepository, inventoryClient client.InventoryClient, userClient client.UserClient, publisher *mq.Publisher) *ApprovalHandler {
 	return &ApprovalHandler{
 		requestRepo:     requestRepo,
 		approvalRepo:    approvalRepo,
 		inventoryClient: inventoryClient,
+		userClient:      userClient,
 		publisher:       publisher,
 	}
+}
+
+func (h *ApprovalHandler) canReview(ctx context.Context, requesterID, reviewerID uuid.UUID, role string) (bool, error) {
+	if role == "admin" {
+		return true, nil
+	}
+
+	manager, err := h.userClient.GetManagerOf(ctx, requesterID)
+	if err != nil {
+		return false, err
+	}
+	return manager.ID == reviewerID, nil
+}
+
+func (h *ApprovalHandler) ListPendingApprovals(c *gin.Context) {
+	reviewerID, err := currentEmployeeID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid manager identity"})
+		return
+	}
+
+	requests, err := h.requestRepo.ListByStatus(c.Request.Context(), domain.RequestStatusPending)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list pending requests"})
+		return
+	}
+
+	if currentRole(c) == "admin" {
+		c.JSON(http.StatusOK, toRequestResponseList(requests))
+		return
+	}
+
+	assigned := make([]domain.AssetRequest, 0)
+	for i := range requests {
+		canReview, err := h.canReview(c.Request.Context(), requests[i].EmployeeID, reviewerID, currentRole(c))
+		if errors.Is(err, client.ErrEmployeeNotFound) {
+			continue
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify request manager"})
+			return
+		}
+		if canReview {
+			assigned = append(assigned, requests[i])
+		}
+	}
+
+	c.JSON(http.StatusOK, toRequestResponseList(assigned))
 }
 
 func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
@@ -54,6 +104,16 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get request"})
+		return
+	}
+
+	canReview, err := h.canReview(c.Request.Context(), assetRequest.EmployeeID, managerID, currentRole(c))
+	if err != nil && !errors.Is(err, client.ErrEmployeeNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify request manager"})
+		return
+	}
+	if !canReview {
+		c.JSON(http.StatusForbidden, gin.H{"error": "request is not assigned to this manager"})
 		return
 	}
 
@@ -138,6 +198,16 @@ func (h *ApprovalHandler) RejectRequest(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get request"})
+		return
+	}
+
+	canReview, err := h.canReview(c.Request.Context(), assetRequest.EmployeeID, managerID, currentRole(c))
+	if err != nil && !errors.Is(err, client.ErrEmployeeNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify request manager"})
+		return
+	}
+	if !canReview {
+		c.JSON(http.StatusForbidden, gin.H{"error": "request is not assigned to this manager"})
 		return
 	}
 

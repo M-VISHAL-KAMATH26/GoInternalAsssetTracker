@@ -25,11 +25,12 @@ func TestMain(m *testing.M) {
 
 // fakeRequestRepo is a hand-rolled test double for RequestRepository.
 type fakeRequestRepo struct {
-	CreateFunc       func(ctx context.Context, request *domain.AssetRequest) error
-	GetByIDFunc      func(ctx context.Context, id uuid.UUID) (*domain.AssetRequest, error)
+	CreateFunc         func(ctx context.Context, request *domain.AssetRequest) error
+	GetByIDFunc        func(ctx context.Context, id uuid.UUID) (*domain.AssetRequest, error)
+	ListFunc           func(ctx context.Context) ([]domain.AssetRequest, error)
 	ListByEmployeeFunc func(ctx context.Context, employeeID uuid.UUID) ([]domain.AssetRequest, error)
-	ListByStatusFunc func(ctx context.Context, status domain.RequestStatus) ([]domain.AssetRequest, error)
-	UpdateStatusFunc func(ctx context.Context, id uuid.UUID, status domain.RequestStatus) error
+	ListByStatusFunc   func(ctx context.Context, status domain.RequestStatus) ([]domain.AssetRequest, error)
+	UpdateStatusFunc   func(ctx context.Context, id uuid.UUID, status domain.RequestStatus) error
 }
 
 func (f *fakeRequestRepo) Create(ctx context.Context, request *domain.AssetRequest) error {
@@ -42,6 +43,13 @@ func (f *fakeRequestRepo) Create(ctx context.Context, request *domain.AssetReque
 func (f *fakeRequestRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.AssetRequest, error) {
 	if f.GetByIDFunc != nil {
 		return f.GetByIDFunc(ctx, id)
+	}
+	return nil, nil
+}
+
+func (f *fakeRequestRepo) List(ctx context.Context) ([]domain.AssetRequest, error) {
+	if f.ListFunc != nil {
+		return f.ListFunc(ctx)
 	}
 	return nil, nil
 }

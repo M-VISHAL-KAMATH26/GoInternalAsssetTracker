@@ -1,4 +1,7 @@
 import { Route, Routes } from 'react-router-dom'
+import AdminCreateUserPage from '../pages/AdminCreateUserPage'
+import AdminDashboardPage from '../pages/AdminDashboardPage'
+import AdminLoginPage from '../pages/AdminLoginPage'
 import ApprovalsPage from '../pages/ApprovalsPage'
 import AssetsPage from '../pages/AssetsPage'
 import HomePage from '../pages/HomePage'
@@ -13,6 +16,7 @@ function AppRoutes() {
 	return (
 		<Routes>
 			<Route element={<LoginPage />} path="/login" />
+			<Route element={<AdminLoginPage />} path="/admin/login" />
 			<Route element={<UnauthorizedPage />} path="/not-authorized" />
 
 			<Route element={<ProtectedRoute />}>
@@ -32,6 +36,13 @@ function AppRoutes() {
 			<Route element={<ProtectedRoute allowedRoles={['admin']} />}>
 				<Route element={<Layout />}>
 					<Route element={<AssetsPage />} path="/assets" />
+				</Route>
+			</Route>
+
+			<Route element={<ProtectedRoute allowedRoles={['admin']} redirectTo="/admin/login" />}>
+				<Route element={<Layout />}>
+					<Route element={<AdminDashboardPage />} path="/admin" />
+					<Route element={<AdminCreateUserPage />} path="/admin/users/new" />
 				</Route>
 			</Route>
 		</Routes>

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Toast from '../components/Toast'
-import { approveRequest, rejectRequest } from '../features/requests/approvalsApi'
-import { listMyRequests } from '../features/requests/requestsApi'
+import { approveRequest, listPendingApprovals, rejectRequest } from '../features/requests/approvalsApi'
 
 const getRequestList = (data) => {
   if (Array.isArray(data)) {
@@ -14,12 +13,8 @@ const getRequestList = (data) => {
 const getRequestId = (request) => request.id ?? request.requestId
 
 const fetchPendingRequests = async () => {
-  // TODO: Replace this with a backend endpoint for pending manager requests.
-  const response = await listMyRequests()
-
-  return getRequestList(response.data).filter(
-    (request) => request.status?.toLowerCase() === 'pending',
-  )
+  const response = await listPendingApprovals()
+  return getRequestList(response.data)
 }
 
 function ApprovalsPage() {

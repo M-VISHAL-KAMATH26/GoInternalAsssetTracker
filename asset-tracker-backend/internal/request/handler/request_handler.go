@@ -18,7 +18,11 @@ type RequestHandler struct {
 	userClient client.UserClient
 }
 
-func NewRequestHandler(repo repository.RequestRepository, userClient client.UserClient) *RequestHandler {
+func NewRequestHandler(repo repository.RequestRepository, userClients ...client.UserClient) *RequestHandler {
+	var userClient client.UserClient
+	if len(userClients) > 0 {
+		userClient = userClients[0]
+	}
 	return &RequestHandler{repo: repo, userClient: userClient}
 }
 
@@ -51,14 +55,16 @@ func (h *RequestHandler) CreateRequest(c *gin.Context) {
 		return
 	}
 
-	_, err = h.userClient.GetEmployee(c.Request.Context(), employeeID)
-	if err != nil {
-		if errors.Is(err, client.ErrEmployeeNotFound) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "employee not recognized"})
+	if h.userClient != nil {
+		_, err = h.userClient.GetEmployee(c.Request.Context(), employeeID)
+		if err != nil {
+			if errors.Is(err, client.ErrEmployeeNotFound) {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "employee not recognized"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify employee"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify employee"})
-		return
 	}
 
 	assetRequest := &domain.AssetRequest{
@@ -86,6 +92,16 @@ func (h *RequestHandler) ListMyRequests(c *gin.Context) {
 	}
 
 	requests, err := h.repo.ListByEmployee(c.Request.Context(), employeeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list requests"})
+		return
+	}
+
+	c.JSON(http.StatusOK, toRequestResponseList(requests))
+}
+
+func (h *RequestHandler) ListAllRequests(c *gin.Context) {
+	requests, err := h.repo.List(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list requests"})
 		return

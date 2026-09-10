@@ -1,5 +1,7 @@
 import axiosClient from '../../api/axios'
 
+export const listPendingApprovals = () => axiosClient.get('/approvals/pending')
+
 export const approveRequest = (id, comment = '') =>
 	axiosClient.patch(`/requests/${id}/approve`, comment ? { comment } : {})
 
