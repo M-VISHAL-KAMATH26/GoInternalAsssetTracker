@@ -20,13 +20,14 @@ const (
 // GORM association — unlike cross-domain references (e.g. EmployeeID
 // used in Inventory or Request), which are plain UUID columns.
 type Employee struct {
-	ID         uuid.UUID    `gorm:"type:char(36);primaryKey"`
-	Name       string       `gorm:"type:varchar(255);not null"`
-	Email      string       `gorm:"type:varchar(255);uniqueIndex;not null"`
-	Role       EmployeeRole `gorm:"type:varchar(20);not null;default:employee"`
-	Department string       `gorm:"type:varchar(100)"`
-	ManagerID  *uuid.UUID   `gorm:"type:char(36);index"` // nil if no manager (e.g. top-level exec)
-	Manager    *Employee    `gorm:"foreignKey:ManagerID;references:ID"`
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID           uuid.UUID    `gorm:"type:char(36);primaryKey"`
+	Name         string       `gorm:"type:varchar(255);not null"`
+	Email        string       `gorm:"type:varchar(255);uniqueIndex;not null"`
+	PasswordHash string       `gorm:"type:varchar(255)"`
+	Role         EmployeeRole `gorm:"type:varchar(20);not null;default:employee"`
+	Department   string       `gorm:"type:varchar(100)"`
+	ManagerID    *uuid.UUID   `gorm:"type:char(36);index"` // nil if no manager (e.g. top-level exec)
+	Manager      *Employee    `gorm:"foreignKey:ManagerID;references:ID"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }

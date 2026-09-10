@@ -3,18 +3,23 @@ package main
 import (
 	"context"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"asset-backend/internal/shared/config"
+	sharedDB "asset-backend/internal/shared/db"
 	"asset-backend/internal/shared/logger"
+	"asset-backend/internal/shared/middleware"
 	userdomain "asset-backend/internal/user/domain"
 	usergrpc "asset-backend/internal/user/grpc"
+	"asset-backend/internal/user/handler"
 	"asset-backend/internal/user/repository"
-	sharedDB "asset-backend/internal/shared/db"
 	pb "asset-backend/proto/user"
 
+	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 )
 
@@ -54,12 +59,33 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown: wait for SIGINT/SIGTERM, then stop cleanly.
+	authHandler := handler.NewAuthHandler(employeeRepo, cfg.JWTSecret)
+	router := gin.Default()
+	router.Use(middleware.CORSMiddleware())
+	handler.RegisterAuthRoutes(router, authHandler)
+
+	httpServer := &http.Server{
+		Addr:    ":" + cfg.HTTPPort,
+		Handler: router,
+	}
+
+	go func() {
+		log.Info("HTTP server listening", "port", cfg.HTTPPort)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("HTTP server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Info("shutting down gracefully...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = httpServer.Shutdown(ctx)
 	grpcServer.GracefulStop()
 
 	sqlDB, err := database.DB()
@@ -67,5 +93,4 @@ func main() {
 		_ = sqlDB.Close()
 	}
 	log.Info("shutdown complete")
-	_ = context.Background()
 }

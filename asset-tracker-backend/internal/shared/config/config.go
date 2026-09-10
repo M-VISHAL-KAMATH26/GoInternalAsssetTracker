@@ -21,8 +21,9 @@ func getEnv(key, fallback string) string {
 }
 
 type UserServiceConfig struct {
-	DBDSN    string
-	GRPCPort string
+	DBDSN     string
+	HTTPPort  string
+	GRPCPort  string
 	JWTSecret string
 }
 
@@ -30,6 +31,7 @@ func LoadUserServiceConfig() UserServiceConfig {
 	Load()
 	return UserServiceConfig{
 		DBDSN:     getEnv("USER_DB_DSN", "root:vishal123@tcp(127.0.0.1:3306)/user_db?charset=utf8mb4&parseTime=True&loc=Local"),
+		HTTPPort:  getEnv("USER_SERVICE_PORT", "8083"),
 		GRPCPort:  getEnv("USER_SERVICE_GRPC_PORT", "9091"),
 		JWTSecret: getEnv("JWT_SECRET", ""),
 	}

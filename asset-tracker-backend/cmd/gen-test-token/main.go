@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
-	"asset-backend/internal/shared/middleware"
+	"asset-backend/internal/shared/auth"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -23,17 +21,7 @@ func main() {
 		role = os.Args[1] // e.g. `go run ./cmd/gen-test-token employee`
 	}
 
-	claims := middleware.Claims{
-		EmployeeID: uuid.New().String(),
-		Role:       role,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString([]byte(secret))
+	signed, err := auth.GenerateToken(uuid.New(), role, secret)
 	if err != nil {
 		log.Fatalf("failed to sign token: %v", err)
 	}
