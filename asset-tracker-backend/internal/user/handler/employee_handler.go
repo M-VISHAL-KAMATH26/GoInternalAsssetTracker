@@ -47,9 +47,9 @@ func (h *EmployeeHandler) CreateEmployee(c *gin.Context) {
 	if req.ManagerEmail != "" {
 		manager, err := h.repo.GetByEmail(c.Request.Context(), managerEmail)
 		if errors.Is(err, repository.ErrEmployeeNotFound) {
-			if req.ManagerName == "" || req.ManagerPassword == "" {
+			if req.ManagerName == "" || req.ManagerPassword == "" || req.ManagerOfficeLocation == "" {
 				c.JSON(http.StatusBadRequest, gin.H{
-					"error": "manager_name and manager_password are required when the manager does not exist",
+					"error": "manager_name, manager_password, and manager_office_location are required when the manager does not exist",
 				})
 				return
 			}
@@ -67,12 +67,14 @@ func (h *EmployeeHandler) CreateEmployee(c *gin.Context) {
 			}
 
 			manager = &domain.Employee{
-				ID:           uuid.New(),
-				Name:         strings.TrimSpace(req.ManagerName),
-				Email:        managerEmail,
-				PasswordHash: managerHash,
-				Role:         domain.RoleManager,
-				ManagerID:    &adminID,
+				ID:             uuid.New(),
+				Name:           strings.TrimSpace(req.ManagerName),
+				Email:          managerEmail,
+				PasswordHash:   managerHash,
+				Role:           domain.RoleManager,
+				OfficeLocation: strings.TrimSpace(req.ManagerOfficeLocation),
+				AvatarURL:      strings.TrimSpace(req.ManagerAvatarURL),
+				ManagerID:      &adminID,
 			}
 			if err := h.repo.Create(c.Request.Context(), manager); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create manager"})
@@ -102,12 +104,14 @@ func (h *EmployeeHandler) CreateEmployee(c *gin.Context) {
 	}
 
 	employee := &domain.Employee{
-		ID:           uuid.New(),
-		Name:         strings.TrimSpace(req.Name),
-		Email:        email,
-		PasswordHash: passwordHash,
-		Role:         domain.EmployeeRole(req.Role),
-		ManagerID:    managerID,
+		ID:             uuid.New(),
+		Name:           strings.TrimSpace(req.Name),
+		Email:          email,
+		PasswordHash:   passwordHash,
+		Role:           domain.EmployeeRole(req.Role),
+		OfficeLocation: strings.TrimSpace(req.OfficeLocation),
+		AvatarURL:      strings.TrimSpace(req.AvatarURL),
+		ManagerID:      managerID,
 	}
 	if err := h.repo.Create(c.Request.Context(), employee); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create employee"})
@@ -115,6 +119,26 @@ func (h *EmployeeHandler) CreateEmployee(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, toEmployeeResponse(employee))
+}
+
+func (h *EmployeeHandler) GetMyProfile(c *gin.Context) {
+	employeeID, err := uuid.Parse(c.GetString(middleware.ContextKeyEmployeeID))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid employee identity"})
+		return
+	}
+
+	employee, err := h.repo.GetByID(c.Request.Context(), employeeID)
+	if errors.Is(err, repository.ErrEmployeeNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load employee profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, toEmployeeResponse(employee))
 }
 
 func (h *EmployeeHandler) ListEmployees(c *gin.Context) {
@@ -133,10 +157,12 @@ func (h *EmployeeHandler) ListEmployees(c *gin.Context) {
 
 func toEmployeeResponse(employee *domain.Employee) EmployeeResponse {
 	return EmployeeResponse{
-		ID:        employee.ID,
-		Name:      employee.Name,
-		Email:     employee.Email,
-		Role:      string(employee.Role),
-		ManagerID: employee.ManagerID,
+		ID:             employee.ID,
+		Name:           employee.Name,
+		Email:          employee.Email,
+		Role:           string(employee.Role),
+		OfficeLocation: employee.OfficeLocation,
+		AvatarURL:      employee.AvatarURL,
+		ManagerID:      employee.ManagerID,
 	}
 }

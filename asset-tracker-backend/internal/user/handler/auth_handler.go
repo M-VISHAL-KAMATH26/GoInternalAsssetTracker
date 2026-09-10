@@ -47,9 +47,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, LoginResponse{
-		Token:      token,
-		EmployeeID: employee.ID,
-		Role:       string(employee.Role),
-		Name:       employee.Name,
+		Token:          token,
+		EmployeeID:     employee.ID,
+		Role:           string(employee.Role),
+		Name:           employee.Name,
+		Email:          employee.Email,
+		OfficeLocation: employee.OfficeLocation,
+		AvatarURL:      employee.AvatarURL,
 	})
 }

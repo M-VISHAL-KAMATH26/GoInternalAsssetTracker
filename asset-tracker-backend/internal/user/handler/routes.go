@@ -13,6 +13,12 @@ func RegisterAuthRoutes(router *gin.Engine, h *AuthHandler) {
 }
 
 func RegisterEmployeeRoutes(router *gin.Engine, h *EmployeeHandler) {
+	profile := router.Group("/employees")
+	profile.Use(middleware.AuthMiddleware(), middleware.RequireRole("employee", "manager", "admin"))
+	{
+		profile.GET("/me", h.GetMyProfile)
+	}
+
 	employees := router.Group("/employees")
 	employees.Use(middleware.AuthMiddleware(), middleware.RequireRole("admin"))
 	{

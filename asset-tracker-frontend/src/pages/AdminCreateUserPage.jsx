@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { uploadProfileImage } from '../api/cloudinary'
 import { createEmployee } from '../features/admin/adminApi'
 
 const initialForm = {
@@ -7,9 +8,11 @@ const initialForm = {
 	email: '',
 	password: '',
 	role: 'employee',
+	officeLocation: '',
 	managerEmail: '',
 	managerName: '',
 	managerPassword: '',
+	managerOfficeLocation: '',
 }
 
 function AdminCreateUserPage() {
@@ -17,6 +20,9 @@ function AdminCreateUserPage() {
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [error, setError] = useState('')
 	const [success, setSuccess] = useState('')
+	const [profileImage, setProfileImage] = useState(null)
+	const [managerProfileImage, setManagerProfileImage] = useState(null)
+	const [fileInputKey, setFileInputKey] = useState(0)
 
 	const updateField = (event) => {
 		const { name, value } = event.target
@@ -32,19 +38,31 @@ function AdminCreateUserPage() {
 		setSuccess('')
 
 		try {
+			const [avatarURL, managerAvatarURL] = await Promise.all([
+				uploadProfileImage(profileImage),
+				form.role === 'admin' ? Promise.resolve('') : uploadProfileImage(managerProfileImage),
+			])
+
 			const employee = await createEmployee({
 				name: form.name.trim(),
 				email: form.email.trim(),
 				password: form.password,
 				role: form.role,
+				office_location: form.officeLocation.trim(),
+				avatar_url: avatarURL,
 				manager_email: form.role === 'admin' ? '' : form.managerEmail.trim(),
 				manager_name: form.role === 'admin' ? '' : form.managerName.trim(),
 				manager_password: form.role === 'admin' ? '' : form.managerPassword,
+				manager_office_location: form.role === 'admin' ? '' : form.managerOfficeLocation.trim(),
+				manager_avatar_url: form.role === 'admin' ? '' : managerAvatarURL,
 			})
 			setSuccess(`${employee.name} was created and can now sign in.`)
 			setForm(initialForm)
+			setProfileImage(null)
+			setManagerProfileImage(null)
+			setFileInputKey((current) => current + 1)
 		} catch (requestError) {
-			setError(requestError.response?.data?.error ?? 'Unable to create the user. Please try again.')
+			setError(requestError.response?.data?.error ?? requestError.message ?? 'Unable to create the user. Please try again.')
 		} finally {
 			setIsSubmitting(false)
 		}
@@ -78,6 +96,18 @@ function AdminCreateUserPage() {
 					<label className="text-sm font-medium text-slate-700">Temporary password
 						<input autoComplete="new-password" className="mt-2 w-full rounded-lg border px-3 py-2.5" minLength={8} name="password" onChange={updateField} required type="password" value={form.password} />
 					</label>
+					<label className="text-sm font-medium text-slate-700">Office location
+						<input className="mt-2 w-full rounded-lg border px-3 py-2.5" name="officeLocation" onChange={updateField} placeholder="Bangalore" required value={form.officeLocation} />
+					</label>
+					<label className="text-sm font-medium text-slate-700">Profile picture <span className="font-normal text-slate-400">(optional)</span>
+						<input
+							accept="image/*"
+							className="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-indigo-700"
+							key={`employee-${fileInputKey}`}
+							onChange={(event) => setProfileImage(event.target.files?.[0] ?? null)}
+							type="file"
+						/>
+					</label>
 				</div>
 
 				{needsManager && (
@@ -93,6 +123,18 @@ function AdminCreateUserPage() {
 							</label>
 							<label className="text-sm font-medium text-slate-700">New manager password <span className="font-normal text-slate-400">(if new)</span>
 								<input className="mt-2 w-full rounded-lg border bg-white px-3 py-2.5" minLength={8} name="managerPassword" onChange={updateField} type="password" value={form.managerPassword} />
+							</label>
+							<label className="text-sm font-medium text-slate-700">New manager office <span className="font-normal text-slate-400">(if new)</span>
+								<input className="mt-2 w-full rounded-lg border bg-white px-3 py-2.5" name="managerOfficeLocation" onChange={updateField} placeholder="Mumbai" value={form.managerOfficeLocation} />
+							</label>
+							<label className="text-sm font-medium text-slate-700">New manager picture <span className="font-normal text-slate-400">(optional)</span>
+								<input
+									accept="image/*"
+									className="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-indigo-700"
+									key={`manager-${fileInputKey}`}
+									onChange={(event) => setManagerProfileImage(event.target.files?.[0] ?? null)}
+									type="file"
+								/>
 							</label>
 						</div>
 					</fieldset>

@@ -2,15 +2,19 @@ import {
 	Boxes,
 	CheckCircle,
 	ClipboardList,
+	Mail,
+	MapPin,
 	Package,
 	Plus,
 	ShieldCheck,
+	UserRound,
 	Users,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { listAssets } from '../features/assets/assetsApi'
+import { getMyProfile } from '../features/auth/authApi'
 import { listMyRequests } from '../features/requests/requestsApi'
 
 const getList = (data, key) => {
@@ -97,10 +101,45 @@ function DashboardSkeleton() {
 	)
 }
 
+function ProfileCard({ profile, role }) {
+	const name = profile?.name ?? 'User'
+	const initials = name
+		.split(/\s+/)
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((part) => part[0]?.toUpperCase())
+		.join('')
+
+	return (
+		<aside className="h-fit rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm lg:sticky lg:top-8">
+			{profile?.avatar_url ? (
+				<img
+					alt={`${name}'s profile`}
+					className="mx-auto h-28 w-28 rounded-full object-cover ring-4 ring-indigo-50"
+					src={profile.avatar_url}
+				/>
+			) : (
+				<div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-indigo-100 text-3xl font-bold text-indigo-700 ring-4 ring-indigo-50">
+					{initials || <UserRound className="h-10 w-10" />}
+				</div>
+			)}
+			<h2 className="mt-4 text-xl font-semibold text-slate-900">{name}</h2>
+			<span className="mt-2 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+				{profile?.role ?? role}
+			</span>
+			<div className="mt-5 space-y-3 border-t border-slate-100 pt-5 text-left text-sm text-slate-600">
+				<p className="flex items-start gap-2"><Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span className="break-all">{profile?.email ?? 'Email not available'}</span></p>
+				<p className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span>{profile?.office_location || 'Location not set'}</span></p>
+			</div>
+		</aside>
+	)
+}
+
 function HomePage() {
 	const role = useSelector((state) => state.auth.role)?.toLowerCase() ?? 'employee'
 	const [requests, setRequests] = useState([])
 	const [assets, setAssets] = useState([])
+	const [profile, setProfile] = useState(null)
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState('')
 
@@ -109,11 +148,15 @@ function HomePage() {
 
 		const loadDashboard = async () => {
 			try {
-				const requestsResponse = await listMyRequests()
+				const [requestsResponse, profileData] = await Promise.all([
+					listMyRequests(),
+					getMyProfile(),
+				])
 				const requestList = getList(requestsResponse.data, 'requests')
 
 				if (isMounted) {
 					setRequests(requestList)
+					setProfile(profileData)
 				}
 
 				if (role === 'admin') {
@@ -177,12 +220,13 @@ function HomePage() {
 	}
 
 	return (
-		<div className="space-y-8">
-			{isLoading ? <DashboardSkeleton /> : (
-				<>
+		<div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
+			<div className="space-y-8">
+				{isLoading ? <DashboardSkeleton /> : (
+					<>
 					<header>
 						<p className="text-sm font-medium text-slate-500">Dashboard</p>
-						<h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Welcome back, {role}</h1>
+						<h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Welcome back, {profile?.name ?? role}</h1>
 						{error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
 					</header>
 
@@ -225,8 +269,10 @@ function HomePage() {
 							</ul>
 						)}
 					</section>
-				</>
-			)}
+					</>
+				)}
+			</div>
+			<ProfileCard profile={profile} role={role} />
 		</div>
 	)
 }
