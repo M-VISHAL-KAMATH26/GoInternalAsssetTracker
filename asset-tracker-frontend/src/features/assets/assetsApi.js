@@ -16,11 +16,12 @@ inventoryClient.interceptors.request.use((config) => {
 
 // The inventory API expects snake_case keys, so map the camelCase form
 // fields the UI works with before sending them.
-const toAssetPayload = ({ name, type, category, serialNumber, status }) => ({
+const toAssetPayload = ({ name, type, category, serialNumber, quantity, status }) => ({
 	name,
 	type,
 	category,
 	serial_number: serialNumber,
+	quantity: Number(quantity),
 	...(status ? { status } : {}),
 })
 

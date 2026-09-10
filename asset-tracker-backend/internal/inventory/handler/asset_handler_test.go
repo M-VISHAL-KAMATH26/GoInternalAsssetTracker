@@ -29,6 +29,7 @@ type fakeAssetRepo struct {
 	CreateFunc                func(ctx context.Context, asset *domain.Asset) error
 	GetByIDFunc               func(ctx context.Context, id uuid.UUID) (*domain.Asset, error)
 	GetBySerialNumberFunc     func(ctx context.Context, serial string) (*domain.Asset, error)
+	GetByTypeAndCategoryFunc  func(ctx context.Context, assetType, category string) (*domain.Asset, error)
 	ListByStatusFunc          func(ctx context.Context, status domain.AssetStatus) ([]domain.Asset, error)
 	ListFunc                  func(ctx context.Context) ([]domain.Asset, error)
 	UpdateStatusFunc          func(ctx context.Context, id uuid.UUID, status domain.AssetStatus) error
@@ -54,7 +55,14 @@ func (f *fakeAssetRepo) GetBySerialNumber(ctx context.Context, serial string) (*
 	if f.GetBySerialNumberFunc != nil {
 		return f.GetBySerialNumberFunc(ctx, serial)
 	}
-	return nil, nil
+	return nil, repository.ErrAssetNotFound
+}
+
+func (f *fakeAssetRepo) GetByTypeAndCategory(ctx context.Context, assetType, category string) (*domain.Asset, error) {
+	if f.GetByTypeAndCategoryFunc != nil {
+		return f.GetByTypeAndCategoryFunc(ctx, assetType, category)
+	}
+	return nil, repository.ErrAssetNotFound
 }
 
 func (f *fakeAssetRepo) ListByStatus(ctx context.Context, status domain.AssetStatus) ([]domain.Asset, error) {
@@ -119,6 +127,7 @@ func sampleAsset(id uuid.UUID) *domain.Asset {
 		Type:         "laptop",
 		Category:     "hardware",
 		SerialNumber: "SN-001",
+		Quantity:     1,
 		Status:       domain.AssetStatusAvailable,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -155,6 +164,9 @@ func TestCreateAsset(t *testing.T) {
 				if resp.SerialNumber != "SN-001" {
 					t.Errorf("serial_number = %q, want %q", resp.SerialNumber, "SN-001")
 				}
+				if resp.Quantity != 1 {
+					t.Errorf("quantity = %d, want 1", resp.Quantity)
+				}
 				if resp.Status != domain.AssetStatusAvailable {
 					t.Errorf("status = %q, want %q", resp.Status, domain.AssetStatusAvailable)
 				}
@@ -175,6 +187,40 @@ func TestCreateAsset(t *testing.T) {
 				}
 				if resp["error"] == "" {
 					t.Error("expected error message in response")
+				}
+			},
+		},
+		{
+			name: "quantity restocks an existing type and category",
+			body: `{"name":"MacBook Pro","type":"laptop","category":"hardware","quantity":4}`,
+			repo: &fakeAssetRepo{
+				GetByTypeAndCategoryFunc: func(_ context.Context, assetType, category string) (*domain.Asset, error) {
+					if assetType != "laptop" || category != "hardware" {
+						t.Errorf("type/category = %s/%s", assetType, category)
+					}
+					asset := sampleAsset(uuid.New())
+					asset.Quantity = 2
+					return asset, nil
+				},
+				UpdateFunc: func(_ context.Context, asset *domain.Asset) error {
+					if asset.Quantity != 6 {
+						t.Errorf("quantity = %d, want 6", asset.Quantity)
+					}
+					return nil
+				},
+				CreateFunc: func(_ context.Context, _ *domain.Asset) error {
+					t.Error("Create should not be called when restocking")
+					return nil
+				},
+			},
+			wantStatus: http.StatusCreated,
+			checkBody: func(t *testing.T, body []byte) {
+				var resp AssetResponse
+				if err := json.Unmarshal(body, &resp); err != nil {
+					t.Fatalf("decode response: %v", err)
+				}
+				if resp.Quantity != 6 {
+					t.Errorf("quantity = %d, want 6", resp.Quantity)
 				}
 			},
 		},
@@ -425,7 +471,7 @@ func TestGetAsset(t *testing.T) {
 
 func TestUpdateAsset(t *testing.T) {
 	assetID := uuid.New()
-	validBody := `{"name":"Updated Laptop","type":"laptop","category":"hardware","serial_number":"SN-002","status":"assigned"}`
+	validBody := `{"name":"Updated Laptop","type":"laptop","category":"hardware","serial_number":"SN-002","quantity":5,"status":"assigned"}`
 
 	tests := []struct {
 		name       string
@@ -461,6 +507,9 @@ func TestUpdateAsset(t *testing.T) {
 				}
 				if resp.SerialNumber != "SN-002" {
 					t.Errorf("serial_number = %q, want %q", resp.SerialNumber, "SN-002")
+				}
+				if resp.Quantity != 5 {
+					t.Errorf("quantity = %d, want 5", resp.Quantity)
 				}
 			},
 		},
@@ -503,7 +552,7 @@ func TestUpdateAsset(t *testing.T) {
 		{
 			name:    "invalid status value fails validation",
 			idParam: assetID.String(),
-			body:    `{"name":"Updated Laptop","type":"laptop","category":"hardware","serial_number":"SN-002","status":"bogus"}`,
+			body:    `{"name":"Updated Laptop","type":"laptop","category":"hardware","serial_number":"SN-002","quantity":5,"status":"bogus"}`,
 			repo: &fakeAssetRepo{
 				GetByIDFunc: func(_ context.Context, id uuid.UUID) (*domain.Asset, error) {
 					return sampleAsset(id), nil

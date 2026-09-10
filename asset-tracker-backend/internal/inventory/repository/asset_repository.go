@@ -19,6 +19,7 @@ type AssetRepository interface {
 	Create(ctx context.Context, asset *domain.Asset) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Asset, error)
 	GetBySerialNumber(ctx context.Context, serial string) (*domain.Asset, error)
+	GetByTypeAndCategory(ctx context.Context, assetType, category string) (*domain.Asset, error)
 	ListByStatus(ctx context.Context, status domain.AssetStatus) ([]domain.Asset, error)
 	List(ctx context.Context) ([]domain.Asset, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.AssetStatus) error
@@ -60,6 +61,21 @@ func (r *assetRepository) GetBySerialNumber(ctx context.Context, serial string) 
 	return &asset, nil
 }
 
+func (r *assetRepository) GetByTypeAndCategory(ctx context.Context, assetType, category string) (*domain.Asset, error) {
+	var asset domain.Asset
+	err := r.db.WithContext(ctx).
+		Where("type = ? AND category = ? AND status <> ?", assetType, category, domain.AssetStatusRetired).
+		Order("created_at").
+		First(&asset).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrAssetNotFound
+		}
+		return nil, err
+	}
+	return &asset, nil
+}
+
 func (r *assetRepository) ListByStatus(ctx context.Context, status domain.AssetStatus) ([]domain.Asset, error) {
 	var assets []domain.Asset
 	err := r.db.WithContext(ctx).Where("status = ?", status).Find(&assets).Error
@@ -82,16 +98,16 @@ func (r *assetRepository) Update(ctx context.Context, asset *domain.Asset) error
 	return r.db.WithContext(ctx).Save(asset).Error
 }
 
-// ReserveAvailableAsset finds one available asset matching type/category,
-// locks it for the duration of the transaction (SELECT ... FOR UPDATE),
-// marks it assigned, and records the assignment — all atomically, so
-// two concurrent calls can never reserve the same asset.
+// ReserveAvailableAsset locks a matching in-stock row, decrements its
+// quantity by one, and records who received it. Quantity hitting zero
+// marks the row assigned so it drops out of the request catalog until
+// an admin restocks it.
 func (r *assetRepository) ReserveAvailableAsset(ctx context.Context, assetType, category string, employeeID uuid.UUID) (*domain.Asset, error) {
 	var asset domain.Asset
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("type = ? AND category = ? AND status = ?", assetType, category, domain.AssetStatusAvailable).
+			Where("type = ? AND category = ? AND status = ? AND quantity > 0", assetType, category, domain.AssetStatusAvailable).
 			Order("created_at").
 			First(&asset).Error
 		if err != nil {
@@ -101,7 +117,10 @@ func (r *assetRepository) ReserveAvailableAsset(ctx context.Context, assetType, 
 			return err
 		}
 
-		asset.Status = domain.AssetStatusAssigned
+		asset.Quantity--
+		if asset.Quantity == 0 {
+			asset.Status = domain.AssetStatusAssigned
+		}
 		if err := tx.Save(&asset).Error; err != nil {
 			return err
 		}

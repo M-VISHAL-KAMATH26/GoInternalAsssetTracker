@@ -30,7 +30,7 @@ func (s *Server) CheckAvailability(ctx context.Context, req *pb.CheckAvailabilit
 	count := 0
 	for _, a := range assets {
 		if a.Type == req.AssetType && a.Category == req.Category {
-			count++
+			count += a.Quantity
 		}
 	}
 

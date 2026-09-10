@@ -15,7 +15,8 @@ type CreateAssetRequest struct {
 	Name         string `json:"name" binding:"required,min=2,max=255"`
 	Type         string `json:"type" binding:"required,max=100"`
 	Category     string `json:"category" binding:"required,max=100"`
-	SerialNumber string `json:"serial_number" binding:"required,max=255"`
+	SerialNumber string `json:"serial_number" binding:"omitempty,max=255"`
+	Quantity     int    `json:"quantity" binding:"omitempty,min=1,max=10000"`
 }
 
 // UpdateAssetRequest is the expected JSON body for PUT /assets/:id.
@@ -26,6 +27,7 @@ type UpdateAssetRequest struct {
 	Type         string             `json:"type" binding:"required,max=100"`
 	Category     string             `json:"category" binding:"required,max=100"`
 	SerialNumber string             `json:"serial_number" binding:"required,max=255"`
+	Quantity     int                `json:"quantity" binding:"required,min=0,max=10000"`
 	Status       domain.AssetStatus `json:"status" binding:"required,oneof=available assigned retired maintenance"`
 }
 
@@ -39,6 +41,7 @@ type AssetResponse struct {
 	Type         string             `json:"type"`
 	Category     string             `json:"category"`
 	SerialNumber string             `json:"serial_number"`
+	Quantity     int                `json:"quantity"`
 	Status       domain.AssetStatus `json:"status"`
 	CreatedAt    time.Time          `json:"created_at"`
 	UpdatedAt    time.Time          `json:"updated_at"`
@@ -52,6 +55,7 @@ func toAssetResponse(a *domain.Asset) AssetResponse {
 		Type:         a.Type,
 		Category:     a.Category,
 		SerialNumber: a.SerialNumber,
+		Quantity:     a.Quantity,
 		Status:       a.Status,
 		CreatedAt:    a.CreatedAt,
 		UpdatedAt:    a.UpdatedAt,
@@ -72,9 +76,12 @@ func toAssetCatalog(assets []domain.Asset) []AssetCatalogEntry {
 	entries := make([]AssetCatalogEntry, 0, len(assets))
 
 	for _, a := range assets {
+		if a.Quantity <= 0 {
+			continue
+		}
 		key := a.Type + "\x00" + a.Category
 		if position, exists := positions[key]; exists {
-			entries[position].AvailableCount++
+			entries[position].AvailableCount += a.Quantity
 			continue
 		}
 
@@ -82,7 +89,7 @@ func toAssetCatalog(assets []domain.Asset) []AssetCatalogEntry {
 		entries = append(entries, AssetCatalogEntry{
 			Type:           a.Type,
 			Category:       a.Category,
-			AvailableCount: 1,
+			AvailableCount: a.Quantity,
 		})
 	}
 

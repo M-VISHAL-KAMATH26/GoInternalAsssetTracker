@@ -7,6 +7,7 @@ const initialForm = {
 	type: '',
 	category: '',
 	serialNumber: '',
+	quantity: '1',
 }
 
 const getAssetList = (data) => {
@@ -104,8 +105,14 @@ function AssetsPage() {
 	const handleCreate = async (event) => {
 		event.preventDefault()
 
-		if (Object.values(form).some((value) => !value.trim())) {
-			setFormError('Complete all fields before creating the asset.')
+		if (!form.name.trim() || !form.type.trim() || !form.category.trim()) {
+			setFormError('Name, type, and category are required.')
+			return
+		}
+
+		const quantity = Number(form.quantity)
+		if (!Number.isInteger(quantity) || quantity < 1) {
+			setFormError('Quantity must be a whole number of at least 1.')
 			return
 		}
 
@@ -119,6 +126,7 @@ function AssetsPage() {
 				type: form.type.trim(),
 				category: form.category.trim(),
 				serialNumber: form.serialNumber.trim(),
+				quantity,
 			})
 			closeModal()
 			setFeedback('Asset created successfully.')
@@ -156,7 +164,7 @@ function AssetsPage() {
 						<p className="text-sm font-medium text-slate-500">Admin portal</p>
 						<h1 className="mt-1 text-3xl font-semibold tracking-tight">Inventory</h1>
 						<p className="mt-2 text-sm text-slate-600">
-							Manage the organization&apos;s assets and their current status.
+							Stock asset types by quantity. Approvals decrement the available count.
 						</p>
 					</div>
 					<button
@@ -194,6 +202,7 @@ function AssetsPage() {
 										<th className="px-6 py-3 font-medium" scope="col">Type</th>
 										<th className="px-6 py-3 font-medium" scope="col">Category</th>
 										<th className="px-6 py-3 font-medium" scope="col">Serial number</th>
+										<th className="px-6 py-3 font-medium" scope="col">Quantity</th>
 										<th className="px-6 py-3 font-medium" scope="col">Status</th>
 										<th className="px-6 py-3 font-medium" scope="col"><span className="sr-only">Actions</span></th>
 									</tr>
@@ -209,6 +218,7 @@ function AssetsPage() {
 												<td className="whitespace-nowrap px-6 py-4">{asset.type ?? asset.assetType ?? '-'}</td>
 												<td className="whitespace-nowrap px-6 py-4">{asset.category ?? '-'}</td>
 												<td className="whitespace-nowrap px-6 py-4">{asset.serialNumber ?? asset.serial_number ?? '-'}</td>
+												<td className="whitespace-nowrap px-6 py-4">{asset.quantity ?? 0}</td>
 												<td className="whitespace-nowrap px-6 py-4">
 													<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusStyle(status)}`}>
 														{status}
@@ -240,24 +250,29 @@ function AssetsPage() {
 				<div aria-labelledby="add-asset-title" aria-modal="true" className="fixed inset-0 z-10 overflow-y-auto bg-slate-900/40 px-4 py-8" role="dialog">
 					<div className="mx-auto max-w-lg rounded-xl bg-white p-6 shadow-xl sm:p-8">
 						<div className="mb-6">
-							<h2 className="text-xl font-semibold" id="add-asset-title">Add asset</h2>
-							<p className="mt-1 text-sm text-slate-500">Add the identifying details for a new inventory item.</p>
+							<h2 className="text-xl font-semibold" id="add-asset-title">Add stock</h2>
+							<p className="mt-1 text-sm text-slate-500">
+								Enter a quantity. If this type and category already exist, the new units are added to that stock.
+							</p>
 						</div>
 						<form className="space-y-4" onSubmit={handleCreate}>
 							{[
-								['name', 'Name', 'MacBook Pro'],
-								['type', 'Type', 'Laptop'],
-								['category', 'Category', 'Hardware'],
-								['serialNumber', 'Serial number', 'SN-12345'],
-							].map(([name, label, placeholder]) => (
+								['name', 'Name', 'MacBook Pro', 'text'],
+								['type', 'Type', 'Laptop', 'text'],
+								['category', 'Category', 'Hardware', 'text'],
+								['serialNumber', 'Serial / SKU (optional)', 'SN-12345', 'text'],
+								['quantity', 'Quantity', '10', 'number'],
+							].map(([name, label, placeholder, inputType]) => (
 								<label className="block" htmlFor={`asset-${name}`} key={name}>
 									<span className="mb-1.5 block text-sm font-medium text-slate-700">{label}</span>
 									<input
 										className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
 										id={`asset-${name}`}
+										min={name === 'quantity' ? '1' : undefined}
 										name={name}
 										onChange={handleFormChange}
 										placeholder={placeholder}
+										type={inputType}
 										value={form[name]}
 									/>
 								</label>

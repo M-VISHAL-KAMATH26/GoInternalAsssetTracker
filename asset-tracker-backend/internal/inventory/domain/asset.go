@@ -24,6 +24,7 @@ type Asset struct {
 	Type         string      `gorm:"type:varchar(100);not null"`
 	Category     string      `gorm:"type:varchar(100);not null"`
 	SerialNumber string      `gorm:"type:varchar(255);uniqueIndex;not null"`
+	Quantity     int         `gorm:"not null;default:1"`
 	Status       AssetStatus `gorm:"type:varchar(20);not null;default:available"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time

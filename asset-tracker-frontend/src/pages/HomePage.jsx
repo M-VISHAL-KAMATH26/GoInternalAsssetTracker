@@ -187,7 +187,14 @@ function HomePage() {
 	const pendingCount = requests.filter((request) => getStatus(request) === 'pending').length
 	// TODO: Replace this placeholder count with a manager-specific pending endpoint.
 	const pendingApprovals = role === 'manager' || role === 'admin' ? pendingCount : 0
-	const availableAssets = assets.filter((asset) => (asset.status ?? '').toLowerCase() === 'available').length
+	const quantityOf = (asset) => {
+		const quantity = Number(asset.quantity)
+		return Number.isFinite(quantity) ? quantity : 0
+	}
+	const totalAssetUnits = assets.reduce((sum, asset) => sum + quantityOf(asset), 0)
+	const availableAssets = assets
+		.filter((asset) => (asset.status ?? '').toLowerCase() === 'available')
+		.reduce((sum, asset) => sum + quantityOf(asset), 0)
 	const recentRequests = sortRecent(requests)
 
 	const stats = [
@@ -201,7 +208,7 @@ function HomePage() {
 
 	if (role === 'admin') {
 		stats.push(
-			{ icon: Boxes, label: 'Total Assets', value: assets.length, iconClassName: 'border-indigo-500' },
+			{ icon: Boxes, label: 'Total Assets', value: totalAssetUnits, iconClassName: 'border-indigo-500' },
 			{ icon: Package, label: 'Available Assets', value: availableAssets, iconClassName: 'border-emerald-500' },
 		)
 	}

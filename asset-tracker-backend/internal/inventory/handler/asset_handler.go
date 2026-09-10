@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"asset-backend/internal/inventory/domain"
@@ -30,12 +31,40 @@ func (h *AssetHandler) CreateAsset(c *gin.Context) {
 		return
 	}
 
+	quantity := req.Quantity
+	if quantity < 1 {
+		quantity = 1
+	}
+
+	existing, err := h.repo.GetByTypeAndCategory(c.Request.Context(), req.Type, req.Category)
+	if err != nil && !errors.Is(err, repository.ErrAssetNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create asset"})
+		return
+	}
+	if existing != nil {
+		existing.Name = req.Name
+		existing.Quantity += quantity
+		existing.Status = domain.AssetStatusAvailable
+		if err := h.repo.Update(c.Request.Context(), existing); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create asset"})
+			return
+		}
+		c.JSON(http.StatusCreated, toAssetResponse(existing))
+		return
+	}
+
+	serial := req.SerialNumber
+	if serial == "" {
+		serial = fmt.Sprintf("SKU-%s", uuid.New().String())
+	}
+
 	asset := &domain.Asset{
 		ID:           uuid.New(),
 		Name:         req.Name,
 		Type:         req.Type,
 		Category:     req.Category,
-		SerialNumber: req.SerialNumber,
+		SerialNumber: serial,
+		Quantity:     quantity,
 		Status:       domain.AssetStatusAvailable,
 	}
 
@@ -132,6 +161,7 @@ func (h *AssetHandler) UpdateAsset(c *gin.Context) {
 	existing.Type = req.Type
 	existing.Category = req.Category
 	existing.SerialNumber = req.SerialNumber
+	existing.Quantity = req.Quantity
 	existing.Status = req.Status
 
 	if err := h.repo.Update(c.Request.Context(), existing); err != nil {
