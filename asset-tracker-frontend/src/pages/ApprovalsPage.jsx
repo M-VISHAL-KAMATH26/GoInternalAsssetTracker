@@ -12,9 +12,13 @@ const getRequestList = (data) => {
 
 const getRequestId = (request) => request.id ?? request.requestId
 
+const isPending = (request) => (request.status ?? 'pending').toLowerCase() === 'pending'
+
+// A decision by any reviewer is final, so anything already decided is
+// dropped here rather than rendered with actions that would 409.
 const fetchPendingRequests = async () => {
   const response = await listPendingApprovals()
-  return getRequestList(response.data)
+  return getRequestList(response.data).filter(isPending)
 }
 
 function ApprovalsPage() {
@@ -66,8 +70,28 @@ function ApprovalsPage() {
     }
   }, [])
 
+  // Another reviewer may decide a request while this tab sits open, so
+  // re-sync whenever the tab regains focus.
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadPendingRequests(false)
+      }
+    }
+
+    window.addEventListener('focus', refreshIfVisible)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+
+    return () => {
+      window.removeEventListener('focus', refreshIfVisible)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+    }
+  }, [loadPendingRequests])
+
+  // Tracked by id, not object identity, so a background refresh does not
+  // detach the open comment form from its request.
   const openAction = (request, action) => {
-    setSelectedAction({ action, request })
+    setSelectedAction({ action, requestId: getRequestId(request) })
     setComment('')
     setFeedback(null)
   }
@@ -86,7 +110,7 @@ function ApprovalsPage() {
       return
     }
 
-    const requestId = getRequestId(selectedAction.request)
+    const { requestId } = selectedAction
     const actionRequest = selectedAction.action === 'approve'
       ? approveRequest
       : rejectRequest
@@ -94,16 +118,36 @@ function ApprovalsPage() {
     setIsSubmitting(true)
     setFeedback(null)
 
+    const removeRequest = () => setRequests((current) => current.filter(
+      (item) => getRequestId(item) !== requestId,
+    ))
+
     try {
       await actionRequest(requestId, comment.trim())
       setSelectedAction(null)
       setComment('')
+      removeRequest()
       setFeedback({
         message: `Request ${selectedAction.action}d successfully.`,
         type: 'success',
       })
       await loadPendingRequests(false)
-    } catch {
+    } catch (actionError) {
+      // 409 means another reviewer already decided this request (or the
+      // matching asset is gone), so it can never be actioned again here.
+      if (actionError.response?.status === 409) {
+        setSelectedAction(null)
+        setComment('')
+        removeRequest()
+        setFeedback({
+          message: actionError.response?.data?.error
+            ?? 'This request was already decided by another reviewer.',
+          type: 'error',
+        })
+        await loadPendingRequests(false)
+        return
+      }
+
       setFeedback({
         message: `Unable to ${selectedAction.action} this request. Please try again.`,
         type: 'error',
@@ -151,7 +195,8 @@ function ApprovalsPage() {
             <div className="divide-y divide-slate-100">
               {requests.map((request) => {
                 const requestId = getRequestId(request)
-                const isSelected = selectedAction?.request === request
+                const isSelected = selectedAction?.requestId === requestId
+                const canDecide = isPending(request)
 
                 return (
                   <article className="p-6" key={requestId}>
@@ -178,27 +223,33 @@ function ApprovalsPage() {
                           {request.justification ?? 'No justification provided.'}
                         </p>
                       </div>
-                      <div className="flex shrink-0 gap-2">
-                        <button
-                          className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={isSubmitting}
-                          onClick={() => openAction(request, 'approve')}
-                          type="button"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={isSubmitting}
-                          onClick={() => openAction(request, 'reject')}
-                          type="button"
-                        >
-                          Reject
-                        </button>
-                      </div>
+                      {canDecide ? (
+                        <div className="flex shrink-0 gap-2">
+                          <button
+                            className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={isSubmitting}
+                            onClick={() => openAction(request, 'approve')}
+                            type="button"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={isSubmitting}
+                            onClick={() => openAction(request, 'reject')}
+                            type="button"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                          Already {(request.status ?? '').toLowerCase()}
+                        </span>
+                      )}
                     </div>
 
-                    {isSelected && (
+                    {isSelected && canDecide && (
                       <form className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4" onSubmit={handleAction}>
                         <label className="block text-sm font-medium text-slate-700" htmlFor={`comment-${requestId}`}>
                           Comment <span className="font-normal text-slate-500">(optional)</span>

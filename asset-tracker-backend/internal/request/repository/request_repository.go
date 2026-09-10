@@ -19,6 +19,7 @@ type RequestRepository interface {
 	ListByEmployee(ctx context.Context, employeeID uuid.UUID) ([]domain.AssetRequest, error)
 	ListByStatus(ctx context.Context, status domain.RequestStatus) ([]domain.AssetRequest, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.RequestStatus) error
+	ClaimPending(ctx context.Context, id uuid.UUID, status domain.RequestStatus) (bool, error)
 }
 
 type requestRepository struct {
@@ -66,4 +67,17 @@ func (r *requestRepository) UpdateStatus(ctx context.Context, id uuid.UUID, stat
 	return r.db.WithContext(ctx).Model(&domain.AssetRequest{}).
 		Where("id = ?", id).
 		Update("status", status).Error
+}
+
+// ClaimPending moves a request out of pending in a single conditional
+// UPDATE, so concurrent reviewers cannot both decide the same request.
+// It reports false when the request was already decided by someone else.
+func (r *requestRepository) ClaimPending(ctx context.Context, id uuid.UUID, status domain.RequestStatus) (bool, error) {
+	result := r.db.WithContext(ctx).Model(&domain.AssetRequest{}).
+		Where("id = ? AND status = ?", id, domain.RequestStatusPending).
+		Update("status", status)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
 }

@@ -117,13 +117,23 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 		return
 	}
 
-	if assetRequest.Status != domain.RequestStatusPending {
-		c.JSON(http.StatusConflict, gin.H{"error": "request is not pending"})
+	// Claim the decision before reserving inventory: whoever wins this
+	// update owns the request, and every other reviewer gets a conflict.
+	claimed, err := h.requestRepo.ClaimPending(c.Request.Context(), requestID, domain.RequestStatusApproved)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update request status"})
+		return
+	}
+	if !claimed {
+		c.JSON(http.StatusConflict, gin.H{"error": "this request has already been decided"})
 		return
 	}
 
 	assetID, _, err := h.inventoryClient.ReserveAsset(c.Request.Context(), assetRequest.AssetType, assetRequest.Category, assetRequest.EmployeeID)
 	if err != nil {
+		// Reservation failed, so release the claim and let it be retried.
+		_ = h.requestRepo.UpdateStatus(c.Request.Context(), requestID, domain.RequestStatusPending)
+
 		if errors.Is(err, client.ErrAssetUnavailable) {
 			c.JSON(http.StatusConflict, gin.H{"error": "no asset available to fulfill this request"})
 			return
@@ -142,11 +152,6 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 	}
 	if err := h.approvalRepo.Create(c.Request.Context(), approval); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record approval"})
-		return
-	}
-
-	if err := h.requestRepo.UpdateStatus(c.Request.Context(), requestID, domain.RequestStatusApproved); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update request status"})
 		return
 	}
 
@@ -211,8 +216,13 @@ func (h *ApprovalHandler) RejectRequest(c *gin.Context) {
 		return
 	}
 
-	if assetRequest.Status != domain.RequestStatusPending {
-		c.JSON(http.StatusConflict, gin.H{"error": "request is not pending"})
+	claimed, err := h.requestRepo.ClaimPending(c.Request.Context(), requestID, domain.RequestStatusRejected)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update request status"})
+		return
+	}
+	if !claimed {
+		c.JSON(http.StatusConflict, gin.H{"error": "this request has already been decided"})
 		return
 	}
 
@@ -226,11 +236,6 @@ func (h *ApprovalHandler) RejectRequest(c *gin.Context) {
 	}
 	if err := h.approvalRepo.Create(c.Request.Context(), approval); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record approval"})
-		return
-	}
-
-	if err := h.requestRepo.UpdateStatus(c.Request.Context(), requestID, domain.RequestStatusRejected); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update request status"})
 		return
 	}
 

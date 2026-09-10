@@ -31,6 +31,7 @@ type fakeRequestRepo struct {
 	ListByEmployeeFunc func(ctx context.Context, employeeID uuid.UUID) ([]domain.AssetRequest, error)
 	ListByStatusFunc   func(ctx context.Context, status domain.RequestStatus) ([]domain.AssetRequest, error)
 	UpdateStatusFunc   func(ctx context.Context, id uuid.UUID, status domain.RequestStatus) error
+	ClaimPendingFunc   func(ctx context.Context, id uuid.UUID, status domain.RequestStatus) (bool, error)
 }
 
 func (f *fakeRequestRepo) Create(ctx context.Context, request *domain.AssetRequest) error {
@@ -73,6 +74,13 @@ func (f *fakeRequestRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status
 		return f.UpdateStatusFunc(ctx, id, status)
 	}
 	return nil
+}
+
+func (f *fakeRequestRepo) ClaimPending(ctx context.Context, id uuid.UUID, status domain.RequestStatus) (bool, error) {
+	if f.ClaimPendingFunc != nil {
+		return f.ClaimPendingFunc(ctx, id, status)
+	}
+	return true, nil
 }
 
 func newTestContext(method, target string, body []byte, params gin.Params) (*gin.Context, *httptest.ResponseRecorder) {
