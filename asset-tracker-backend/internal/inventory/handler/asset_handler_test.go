@@ -26,13 +26,14 @@ func TestMain(m *testing.M) {
 // Each method delegates to an optional func field so tests override only
 // the behavior they need.
 type fakeAssetRepo struct {
-	CreateFunc            func(ctx context.Context, asset *domain.Asset) error
-	GetByIDFunc           func(ctx context.Context, id uuid.UUID) (*domain.Asset, error)
-	GetBySerialNumberFunc func(ctx context.Context, serial string) (*domain.Asset, error)
-	ListByStatusFunc      func(ctx context.Context, status domain.AssetStatus) ([]domain.Asset, error)
-	ListFunc              func(ctx context.Context) ([]domain.Asset, error)
-	UpdateStatusFunc      func(ctx context.Context, id uuid.UUID, status domain.AssetStatus) error
-	UpdateFunc            func(ctx context.Context, asset *domain.Asset) error
+	CreateFunc                func(ctx context.Context, asset *domain.Asset) error
+	GetByIDFunc               func(ctx context.Context, id uuid.UUID) (*domain.Asset, error)
+	GetBySerialNumberFunc     func(ctx context.Context, serial string) (*domain.Asset, error)
+	ListByStatusFunc          func(ctx context.Context, status domain.AssetStatus) ([]domain.Asset, error)
+	ListFunc                  func(ctx context.Context) ([]domain.Asset, error)
+	UpdateStatusFunc          func(ctx context.Context, id uuid.UUID, status domain.AssetStatus) error
+	UpdateFunc                func(ctx context.Context, asset *domain.Asset) error
+	ReserveAvailableAssetFunc func(ctx context.Context, assetType, category string, employeeID uuid.UUID) (*domain.Asset, error)
 }
 
 func (f *fakeAssetRepo) Create(ctx context.Context, asset *domain.Asset) error {
@@ -82,6 +83,13 @@ func (f *fakeAssetRepo) Update(ctx context.Context, asset *domain.Asset) error {
 		return f.UpdateFunc(ctx, asset)
 	}
 	return nil
+}
+
+func (f *fakeAssetRepo) ReserveAvailableAsset(ctx context.Context, assetType, category string, employeeID uuid.UUID) (*domain.Asset, error) {
+	if f.ReserveAvailableAssetFunc != nil {
+		return f.ReserveAvailableAssetFunc(ctx, assetType, category, employeeID)
+	}
+	return nil, nil
 }
 
 func newTestContext(method, target string, body []byte, params gin.Params) (*gin.Context, *httptest.ResponseRecorder) {

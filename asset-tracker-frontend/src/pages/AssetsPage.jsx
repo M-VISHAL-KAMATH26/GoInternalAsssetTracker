@@ -123,8 +123,8 @@ function AssetsPage() {
 			closeModal()
 			setFeedback('Asset created successfully.')
 			await loadAssets(false)
-		} catch {
-			setFormError('Unable to create the asset. Please try again.')
+		} catch (error) {
+			setFormError(error.response?.data?.error ?? 'Unable to create the asset. Please try again.')
 		} finally {
 			setIsSubmitting(false)
 		}

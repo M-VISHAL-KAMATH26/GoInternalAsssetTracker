@@ -1,19 +1,51 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { listAssetCatalog } from '../features/assets/assetsApi'
 import { createRequest } from '../features/requests/requestsApi'
 
 const initialForm = {
-  assetType: '',
-  category: '',
+  asset: '',
   justification: '',
 }
+
+// The dropdown stores type and category in a single value, since a request
+// must match an existing inventory pair to be approvable.
+const toAssetValue = (entry) => `${entry.type}||${entry.category}`
 
 function NewRequestPage() {
   const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
+  const [catalog, setCatalog] = useState([])
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true)
+  const [catalogError, setCatalogError] = useState('')
   const [errors, setErrors] = useState({})
   const [submitError, setSubmitError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+
+    listAssetCatalog()
+      .then((response) => {
+        if (isMounted) {
+          setCatalog(Array.isArray(response.data) ? response.data : [])
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setCatalogError('Unable to load the available assets. Please try again.')
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingCatalog(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -26,12 +58,8 @@ function NewRequestPage() {
   const validate = () => {
     const nextErrors = {}
 
-    if (!form.assetType.trim()) {
-      nextErrors.assetType = 'Asset type is required.'
-    }
-
-    if (!form.category.trim()) {
-      nextErrors.category = 'Category is required.'
+    if (!form.asset) {
+      nextErrors.asset = 'Select the asset you need.'
     }
 
     if (!form.justification.trim()) {
@@ -54,10 +82,12 @@ function NewRequestPage() {
     setIsSubmitting(true)
     setSubmitError('')
 
+    const [assetType, category] = form.asset.split('||')
+
     try {
       await createRequest({
-        assetType: form.assetType.trim(),
-        category: form.category.trim(),
+        assetType,
+        category,
         justification: form.justification.trim(),
       })
       navigate('/requests')
@@ -85,37 +115,35 @@ function NewRequestPage() {
           noValidate
         >
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="assetType">
-              Asset type
+            <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="asset">
+              Asset
             </label>
-            <input
-              aria-describedby={errors.assetType ? 'assetType-error' : undefined}
-              aria-invalid={Boolean(errors.assetType)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-              id="assetType"
-              name="assetType"
+            <select
+              aria-describedby={errors.asset ? 'asset-error' : undefined}
+              aria-invalid={Boolean(errors.asset)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50"
+              disabled={isLoadingCatalog || catalog.length === 0}
+              id="asset"
+              name="asset"
               onChange={handleChange}
-              placeholder="For example, laptop"
-              value={form.assetType}
-            />
-            {errors.assetType && <p className="mt-1 text-sm text-red-600" id="assetType-error">{errors.assetType}</p>}
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="category">
-              Category
-            </label>
-            <input
-              aria-describedby={errors.category ? 'category-error' : undefined}
-              aria-invalid={Boolean(errors.category)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-              id="category"
-              name="category"
-              onChange={handleChange}
-              placeholder="For example, hardware"
-              value={form.category}
-            />
-            {errors.category && <p className="mt-1 text-sm text-red-600" id="category-error">{errors.category}</p>}
+              value={form.asset}
+            >
+              <option value="">
+                {isLoadingCatalog ? 'Loading available assets...' : 'Select an asset'}
+              </option>
+              {catalog.map((entry) => (
+                <option key={toAssetValue(entry)} value={toAssetValue(entry)}>
+                  {entry.type} — {entry.category} ({entry.available_count} available)
+                </option>
+              ))}
+            </select>
+            {errors.asset && <p className="mt-1 text-sm text-red-600" id="asset-error">{errors.asset}</p>}
+            {catalogError && <p className="mt-1 text-sm text-red-600" role="alert">{catalogError}</p>}
+            {!isLoadingCatalog && !catalogError && catalog.length === 0 && (
+              <p className="mt-1 text-sm text-slate-500">
+                No assets are available right now. Ask an administrator to add inventory.
+              </p>
+            )}
           </div>
 
           <div>

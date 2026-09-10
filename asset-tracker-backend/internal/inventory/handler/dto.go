@@ -58,6 +58,37 @@ func toAssetResponse(a *domain.Asset) AssetResponse {
 	}
 }
 
+// AssetCatalogEntry describes a type/category combination that employees
+// can request, along with how many units are currently available.
+type AssetCatalogEntry struct {
+	Type           string `json:"type"`
+	Category       string `json:"category"`
+	AvailableCount int    `json:"available_count"`
+}
+
+// toAssetCatalog collapses available assets into unique type/category pairs.
+func toAssetCatalog(assets []domain.Asset) []AssetCatalogEntry {
+	positions := make(map[string]int, len(assets))
+	entries := make([]AssetCatalogEntry, 0, len(assets))
+
+	for _, a := range assets {
+		key := a.Type + "\x00" + a.Category
+		if position, exists := positions[key]; exists {
+			entries[position].AvailableCount++
+			continue
+		}
+
+		positions[key] = len(entries)
+		entries = append(entries, AssetCatalogEntry{
+			Type:           a.Type,
+			Category:       a.Category,
+			AvailableCount: 1,
+		})
+	}
+
+	return entries
+}
+
 // toAssetResponseList maps a slice of domain.Asset to a slice of AssetResponse.
 func toAssetResponseList(assets []domain.Asset) []AssetResponse {
 	responses := make([]AssetResponse, 0, len(assets))

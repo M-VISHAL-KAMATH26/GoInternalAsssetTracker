@@ -70,6 +70,19 @@ func (h *AssetHandler) ListAssets(c *gin.Context) {
 	c.JSON(http.StatusOK, toAssetResponseList(assets))
 }
 
+// ListAssetCatalog handles GET /assets/catalog. Unlike the admin-only
+// endpoints, any authenticated employee may read it — it exposes only the
+// requestable type/category pairs, never individual asset records.
+func (h *AssetHandler) ListAssetCatalog(c *gin.Context) {
+	assets, err := h.repo.ListByStatus(c.Request.Context(), domain.AssetStatusAvailable)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list asset catalog"})
+		return
+	}
+
+	c.JSON(http.StatusOK, toAssetCatalog(assets))
+}
+
 // GetAsset handles GET /assets/:id.
 func (h *AssetHandler) GetAsset(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
