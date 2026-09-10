@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { login } from '../features/auth/authApi'
 import { setCredentials } from '../features/auth/authSlice'
 
@@ -44,6 +44,9 @@ function AdminLoginPage() {
 					<p className="text-sm font-medium text-indigo-300">Asset Tracker Administration</p>
 					<h1 className="mt-1 text-3xl font-semibold tracking-tight">Admin sign in</h1>
 					<p className="mt-2 text-sm text-slate-300">Only administrator accounts can access this panel.</p>
+					<Link className="mt-3 inline-block text-sm font-medium text-slate-400 hover:text-white" to="/">
+						← Back to home
+					</Link>
 				</div>
 				<form className="space-y-5 rounded-xl bg-white p-6 shadow-xl sm:p-8" onSubmit={handleSubmit}>
 					<label className="block text-sm font-medium text-slate-700" htmlFor="admin-email">

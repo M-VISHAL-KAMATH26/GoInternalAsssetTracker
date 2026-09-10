@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useDispatch } from 'react-redux'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { login } from '../features/auth/authApi'
 import { setCredentials } from '../features/auth/authSlice'
 
@@ -20,7 +20,7 @@ function LoginPage() {
 		try {
 			const data = await login(email.trim(), password)
 			dispatch(setCredentials(data.token))
-			navigate(data.role === 'admin' ? '/admin' : '/')
+			navigate(data.role === 'admin' ? '/admin' : '/requests')
 		} catch {
 			setError('Invalid email or password.')
 		} finally {
@@ -37,6 +37,9 @@ function LoginPage() {
 					<p className="mt-2 text-sm text-slate-600">
 						Use your work email and password to continue.
 					</p>
+					<Link className="mt-3 inline-block text-sm font-medium text-slate-500 hover:text-slate-900" to="/">
+						← Back to home
+					</Link>
 				</div>
 
 				<form

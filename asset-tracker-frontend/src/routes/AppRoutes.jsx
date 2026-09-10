@@ -1,10 +1,11 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import AdminCreateUserPage from '../pages/AdminCreateUserPage'
 import AdminDashboardPage from '../pages/AdminDashboardPage'
 import AdminLoginPage from '../pages/AdminLoginPage'
 import ApprovalsPage from '../pages/ApprovalsPage'
 import AssetsPage from '../pages/AssetsPage'
 import HomePage from '../pages/HomePage'
+import LandingPage from '../pages/LandingPage'
 import LoginPage from '../pages/LoginPage'
 import NewRequestPage from '../pages/NewRequestPage'
 import RequestsListPage from '../pages/RequestsListPage'
@@ -15,14 +16,15 @@ import ProtectedRoute from './ProtectedRoute'
 function AppRoutes() {
 	return (
 		<Routes>
+			<Route element={<LandingPage />} path="/" />
 			<Route element={<LoginPage />} path="/login" />
 			<Route element={<AdminLoginPage />} path="/admin/login" />
 			<Route element={<UnauthorizedPage />} path="/not-authorized" />
 
 			<Route element={<ProtectedRoute />}>
 				<Route element={<Layout />}>
-					<Route element={<HomePage />} path="/" />
-					<Route element={<RequestsListPage />} path="/requests" />
+					<Route element={<HomePage />} path="/requests" />
+					<Route element={<RequestsListPage />} path="/requests/history" />
 					<Route element={<NewRequestPage />} path="/requests/new" />
 				</Route>
 			</Route>
@@ -45,6 +47,8 @@ function AppRoutes() {
 					<Route element={<AdminCreateUserPage />} path="/admin/users/new" />
 				</Route>
 			</Route>
+
+			<Route element={<Navigate replace to="/" />} path="*" />
 		</Routes>
 	)
 }

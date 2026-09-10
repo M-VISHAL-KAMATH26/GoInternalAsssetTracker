@@ -13,9 +13,8 @@ function NavBar() {
 	const role = useSelector((state) => state.auth.role)?.toLowerCase()
 
 	const handleLogout = () => {
-		const loginPath = role === 'admin' ? '/admin/login' : '/login'
 		dispatch(logout())
-		navigate(loginPath)
+		navigate('/')
 	}
 
 	return (
@@ -26,7 +25,8 @@ function NavBar() {
 				</NavLink>
 				<nav aria-label="Main navigation" className="flex flex-1 flex-wrap items-center gap-1">
 					{role === 'admin' && <NavLink className={linkClassName} to="/admin">Admin panel</NavLink>}
-					<NavLink className={linkClassName} to="/requests">Requests</NavLink>
+					<NavLink className={linkClassName} end to="/requests">Dashboard</NavLink>
+					<NavLink className={linkClassName} to="/requests/history">My requests</NavLink>
 					<NavLink className={linkClassName} to="/requests/new">New request</NavLink>
 					{(role === 'manager' || role === 'admin') && (
 						<NavLink className={linkClassName} to="/approvals">Approvals</NavLink>

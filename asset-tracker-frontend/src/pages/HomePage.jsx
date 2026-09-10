@@ -208,7 +208,7 @@ function HomePage() {
 
 	const quickActions = [
 		{ icon: Plus, title: 'New Request', description: 'Request an asset for your work.', to: '/requests/new' },
-		{ icon: ClipboardList, title: 'My Requests', description: 'Track your submitted requests.', to: '/requests' },
+		{ icon: ClipboardList, title: 'My Requests', description: 'Track your submitted requests.', to: '/requests/history' },
 	]
 
 	if (role === 'manager' || role === 'admin') {
@@ -247,7 +247,7 @@ function HomePage() {
 					<section className="rounded-xl border border-slate-200 bg-white shadow-sm">
 						<div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
 							<h2 className="font-semibold text-slate-900">Recent Activity</h2>
-							<Link className="text-sm font-medium text-indigo-600 hover:text-indigo-700" to="/requests">View all</Link>
+							<Link className="text-sm font-medium text-indigo-600 hover:text-indigo-700" to="/requests/history">View all</Link>
 						</div>
 						{recentRequests.length === 0 ? (
 							<p className="px-5 py-8 text-center text-sm text-slate-500">No recent requests.</p>
